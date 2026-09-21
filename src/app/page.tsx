@@ -1,7 +1,5 @@
+import { GeoDashboard } from "@/components/geo-dashboard";
+
 export default function Home() {
-  return (
-    <main>
-      <div>Hello world!</div>
-    </main>
-  );
+  return <GeoDashboard />;
 }
