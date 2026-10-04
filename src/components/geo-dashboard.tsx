@@ -13,6 +13,7 @@ import {
   type Feature,
   type FeatureCollection,
 } from "@/lib/geojson";
+import type * as Leaflet from "leaflet";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type LayerStatus = "idle" | "loading" | "ready" | "missing" | "error";
@@ -23,43 +24,11 @@ type LayerState = {
   message?: string;
 };
 
-type LeafletModule = {
-  map: (element: HTMLElement, options: Record<string, unknown>) => LeafletMap;
-  tileLayer: (url: string, options: Record<string, unknown>) => LeafletLayer;
-  geoJSON: (
-    data: FeatureCollection,
-    options: Record<string, unknown>,
-  ) => LeafletLayer;
-  latLngBounds: (coordinates: Array<[number, number]>) => LeafletBounds;
-};
-
-type LeafletMap = {
-  addLayer: (layer: LeafletLayer) => void;
-  removeLayer: (layer: LeafletLayer) => void;
-  fitBounds: (bounds: LeafletBounds, options?: Record<string, unknown>) => void;
-  setView: (center: [number, number], zoom: number) => void;
-  remove: () => void;
-};
-
-type LeafletLayer = {
-  addTo: (map: LeafletMap) => LeafletLayer;
-  bindPopup?: (content: string) => LeafletLayer;
-  getBounds?: () => LeafletBounds;
-};
-
-type LeafletBounds = {
-  isValid?: () => boolean;
-};
-
-declare global {
-  interface Window {
-    L?: LeafletModule;
-  }
-}
+type LeafletModule = typeof Leaflet;
+type LeafletMap = Leaflet.Map;
+type LeafletLayer = Leaflet.GeoJSON | Leaflet.TileLayer;
 
 const CAMPOS_GERAIS_CENTER: [number, number] = [-24.75, -50.05];
-const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
 
 function formatArea(squareMeters: number) {
   const hectares = squareMeters / 10_000;
@@ -104,53 +73,12 @@ function buildPopupContent(feature: Feature, layer: DashboardLayer) {
   }`;
 }
 
-function ensureLeafletAssets() {
+async function loadLeaflet(): Promise<LeafletModule> {
   if (typeof window === "undefined") {
-    return Promise.reject(
-      new Error("Leaflet só pode ser carregado no navegador."),
-    );
+    throw new Error("Leaflet só pode ser carregado no navegador.");
   }
 
-  if (window.L) return Promise.resolve(window.L);
-
-  const existingCss = document.querySelector(`link[href="${LEAFLET_CSS_URL}"]`);
-  if (!existingCss) {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = LEAFLET_CSS_URL;
-    document.head.appendChild(link);
-  }
-
-  return new Promise<LeafletModule>((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      `script[src="${LEAFLET_JS_URL}"]`,
-    );
-
-    if (existingScript) {
-      existingScript.addEventListener("load", () => {
-        if (window.L) resolve(window.L);
-        else reject(new Error("Leaflet não foi inicializado."));
-      });
-      existingScript.addEventListener("error", () =>
-        reject(new Error("Falha ao carregar Leaflet.")),
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = LEAFLET_JS_URL;
-    script.async = true;
-    script.integrity = "sha256-p4NxAoJBhIINfQm8PWg6JdA8V6x/eb1Eu4FJ8cORpGk=";
-    script.crossOrigin = "";
-    script.addEventListener("load", () => {
-      if (window.L) resolve(window.L);
-      else reject(new Error("Leaflet não foi inicializado."));
-    });
-    script.addEventListener("error", () =>
-      reject(new Error("Falha ao carregar Leaflet.")),
-    );
-    document.body.appendChild(script);
-  });
+  return import("leaflet");
 }
 
 async function loadLayer(layer: DashboardLayer): Promise<LayerState> {
@@ -210,6 +138,7 @@ function statusLabel(status: LayerStatus) {
 export function GeoDashboard() {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+  const leafletRef = useRef<LeafletModule | null>(null);
   const renderedLayersRef = useRef<Map<string, LeafletLayer>>(new Map());
   const [layerStates, setLayerStates] = useState<Record<string, LayerState>>(
     () =>
@@ -269,9 +198,11 @@ export function GeoDashboard() {
   useEffect(() => {
     let cancelled = false;
 
-    ensureLeafletAssets()
+    loadLeaflet()
       .then((leaflet) => {
         if (cancelled || !mapElementRef.current || mapRef.current) return;
+
+        leafletRef.current = leaflet;
 
         const map = leaflet.map(mapElementRef.current, {
           center: CAMPOS_GERAIS_CENTER,
@@ -311,7 +242,7 @@ export function GeoDashboard() {
 
   useEffect(() => {
     const map = mapRef.current;
-    const leaflet = window.L;
+    const leaflet = leafletRef.current;
     if (!map || !leaflet) return;
 
     for (const [layerId, mapLayer] of renderedLayersRef.current.entries()) {
@@ -335,8 +266,10 @@ export function GeoDashboard() {
           fillColor: layer.fillColor,
           fillOpacity: layer.fillOpacity,
         },
-        onEachFeature: (feature: Feature, featureLayer: LeafletLayer) => {
-          featureLayer.bindPopup?.(buildPopupContent(feature, layer));
+        onEachFeature: (feature, featureLayer) => {
+          featureLayer.bindPopup(
+            buildPopupContent(feature as unknown as Feature, layer),
+          );
         },
       });
 
@@ -344,9 +277,11 @@ export function GeoDashboard() {
       renderedLayersRef.current.set(layer.id, mapLayer);
     }
 
-    const boundaryLayer = renderedLayersRef.current.get("campos-gerais");
-    const bounds = boundaryLayer?.getBounds?.();
-    if (bounds?.isValid?.()) {
+    const boundaryLayer = renderedLayersRef.current.get("campos-gerais") as
+      | Leaflet.GeoJSON
+      | undefined;
+    const bounds = boundaryLayer?.getBounds();
+    if (bounds?.isValid()) {
       map.fitBounds(bounds, { padding: [28, 28], maxZoom: 10 });
     } else if (renderedLayersRef.current.size === 0) {
       map.setView(CAMPOS_GERAIS_CENTER, 8);
