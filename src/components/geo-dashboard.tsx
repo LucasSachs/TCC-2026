@@ -150,6 +150,7 @@ export function GeoDashboard() {
   const mapRef = useRef<LeafletMap | null>(null);
   const leafletRef = useRef<LeafletModule | null>(null);
   const renderedLayersRef = useRef<Map<string, LeafletLayer>>(new Map());
+  const didFitToBoundaryRef = useRef(false);
   const [layerStates, setLayerStates] = useState<Record<string, LayerState>>(
     () =>
       Object.fromEntries(
@@ -292,14 +293,15 @@ export function GeoDashboard() {
       renderedLayersRef.current.set(layer.id, mapLayer);
     }
 
-    const boundaryLayer = renderedLayersRef.current.get("campos-gerais") as
-      | Leaflet.GeoJSON
-      | undefined;
-    const bounds = boundaryLayer?.getBounds();
-    if (bounds?.isValid()) {
-      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 10 });
-    } else if (renderedLayersRef.current.size === 0) {
-      map.setView(CAMPOS_GERAIS_CENTER, 8);
+    if (!didFitToBoundaryRef.current) {
+      const boundaryLayer = renderedLayersRef.current.get("campos-gerais") as
+        | Leaflet.GeoJSON
+        | undefined;
+      const bounds = boundaryLayer?.getBounds();
+      if (bounds?.isValid()) {
+        map.fitBounds(bounds, { padding: [28, 28], maxZoom: 10 });
+        didFitToBoundaryRef.current = true;
+      }
     }
   }, [layerStates, visibleLayerIds]);
 
@@ -365,6 +367,7 @@ export function GeoDashboard() {
             <span className="eyebrow">WebGIS Campos Gerais</span>
             <h1>Dashboard de vegetação e áreas de preservação</h1>
           </div>
+
           <span className="map-status">
             {missingLayers > 0
               ? `${missingLayers} camada(s) aguardando GeoJSON`
@@ -373,12 +376,16 @@ export function GeoDashboard() {
         </div>
 
         <div className="map-wrapper">
-          <div ref={mapElementRef} className="map-canvas" />
-          {leafletError ? (
-            <div className="map-error">{leafletError}</div>
-          ) : null}
+          <div
+	    ref={mapElementRef}
+	    className="map-canvas"
+	  />
+
+          {leafletError ? ( <div className="map-error">{leafletError}</div>) : null}
+
           <div className="map-legend">
             <strong>Legenda ativa</strong>
+
             {activeLayers.map((layer) => (
               <span key={layer.id}>
                 <i
@@ -413,6 +420,7 @@ export function GeoDashboard() {
             <strong>{totalAreaFormatted.hectares} ha</strong>
             <small>{totalAreaFormatted.squareKilometers} km²</small>
           </div>
+
           <div>
             <span>Camadas visíveis</span>
             <strong>{activeLayers.length}</strong>
@@ -422,6 +430,7 @@ export function GeoDashboard() {
 
         <section className="card control-card">
           <label htmlFor="municipality-filter">Filtro por município</label>
+
           <select
             id="municipality-filter"
             value={selectedMunicipality}
@@ -434,6 +443,7 @@ export function GeoDashboard() {
               </option>
             ))}
           </select>
+
           <p>
             O filtro está preparado na interface. Quando os GeoJSON tiverem
             atributo municipal ou interseção espacial validada, o recorte será
@@ -444,16 +454,24 @@ export function GeoDashboard() {
         <section className="card layers-card">
           <div className="section-title">
             <h2>Camadas</h2>
-            <button
-              type="button"
-              onClick={() =>
-                setVisibleLayerIds(
-                  new Set(DASHBOARD_LAYERS.map((layer) => layer.id)),
-                )
-              }
-            >
-              Exibir todas
-            </button>
+            <div className="section-title-actions">
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleLayerIds(
+                    new Set(DASHBOARD_LAYERS.map((layer) => layer.id)),
+                  )
+                }
+              >
+                Exibir todas
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibleLayerIds(new Set())}
+              >
+                Limpar seleção
+              </button>
+            </div>
           </div>
 
           {Object.entries(groupedLayers).map(([group, layers]) => (
