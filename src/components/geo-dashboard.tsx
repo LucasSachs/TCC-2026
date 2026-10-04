@@ -30,6 +30,16 @@ type LeafletLayer = Leaflet.GeoJSON | Leaflet.TileLayer;
 
 const CAMPOS_GERAIS_CENTER: [number, number] = [-24.75, -50.05];
 
+// Caixa delimitadora aproximada cobrindo os 19 municípios dos Campos Gerais
+// (PR): Arapoti, Carambeí, Castro, Curiúva, Imbaú, Ipiranga, Ivaí,
+// Jaguariaíva, Ortigueira, Palmeira, Piraí do Sul, Ponta Grossa, Porto
+// Amazonas, Reserva, São João do Triunfo, Sengés, Telêmaco Borba, Tibagi e
+// Ventania, com margem de segurança.
+const CAMPOS_GERAIS_BOUNDS: [[number, number], [number, number]] = [
+  [-25.9, -51.3],
+  [-23.8, -49.1],
+];
+
 function formatArea(squareMeters: number) {
   const hectares = squareMeters / 10_000;
   const squareKilometers = squareMeters / 1_000_000;
@@ -209,6 +219,8 @@ export function GeoDashboard() {
           zoom: 8,
           zoomControl: true,
           scrollWheelZoom: true,
+          maxBounds: CAMPOS_GERAIS_BOUNDS,
+          maxBoundsViscosity: 1.0,
         });
 
         leaflet
@@ -218,6 +230,9 @@ export function GeoDashboard() {
               '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
           })
           .addTo(map);
+
+        map.setMinZoom(map.getBoundsZoom(CAMPOS_GERAIS_BOUNDS));
+        map.fitBounds(CAMPOS_GERAIS_BOUNDS);
 
         mapRef.current = map;
       })
