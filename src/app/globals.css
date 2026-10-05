@@ -44,9 +44,13 @@ input {
   color: var(--foreground);
 }
 
+.leaflet-popup-content-wrapper {
+  font-family: var(--font-geist), sans-serif;
+}
+
 .dashboard-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr) minmax(560px, 42vw);
   gap: 18px;
   min-height: 100vh;
   padding: 18px;
@@ -61,53 +65,15 @@ input {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--panel-border);
+  border: 6px solid rgba(255, 255, 255, 0.95);
   border-radius: 28px;
   background: var(--panel);
   box-shadow: var(--shadow);
 }
 
-.map-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 22px 24px;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--primary-dark);
-  font-weight: 800;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.map-header h1,
 .card h2,
 .layer-group h3 {
   margin: 0;
-}
-
-.map-header h1 {
-  margin-top: 6px;
-  font-size: clamp(1.35rem, 2.3vw, 2.35rem);
-  line-height: 1.05;
-}
-
-.map-status {
-  flex: 0 0 auto;
-  border: 1px solid rgba(47, 125, 70, 0.22);
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  font-size: 0.82rem;
-  font-weight: 700;
 }
 
 .map-wrapper {
@@ -173,15 +139,22 @@ input {
 }
 
 .sidebar {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 1.1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "layers stats"
+    "layers filter"
+    "layers area";
   gap: 14px;
+  height: calc(100vh - 36px);
   max-height: calc(100vh - 36px);
-  overflow: auto;
-  padding-right: 2px;
+  overflow: hidden;
 }
 
 .card {
+  min-height: 0;
+  overflow: auto;
   border: 1px solid var(--panel-border);
   border-radius: 22px;
   padding: 18px;
@@ -189,28 +162,34 @@ input {
   box-shadow: 0 12px 32px rgba(20, 45, 25, 0.09);
 }
 
-.intro-card h2 {
-  margin-top: 6px;
-  font-size: 1.45rem;
-}
-
-.intro-card p,
 .control-card p,
 .layer-copy small,
 .area-row small {
   color: var(--muted);
 }
 
-.intro-card p,
 .control-card p {
   margin: 8px 0 0;
   line-height: 1.5;
 }
 
 .stats-grid {
+  grid-area: stats;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.control-card {
+  grid-area: filter;
+}
+
+.layers-card {
+  grid-area: layers;
+}
+
+.table-card {
+  grid-area: area;
 }
 
 .stats-grid div {
@@ -268,6 +247,22 @@ input {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.layers-card .section-title {
+  display: block;
+}
+
+.layers-card .section-title-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.layers-card .section-title-actions button {
+  width: 100%;
+  padding-inline: 8px;
+  white-space: nowrap;
 }
 
 .section-title button {
@@ -362,6 +357,7 @@ input {
 }
 
 .leaflet-popup-content table {
+  width: 100%;
   margin-top: 8px;
   border-collapse: collapse;
   font-size: 0.78rem;
@@ -386,7 +382,12 @@ input {
   }
 
   .sidebar {
+    height: auto;
     max-height: none;
+    overflow: visible;
+  }
+
+  .card {
     overflow: visible;
   }
 }
@@ -396,10 +397,19 @@ input {
     padding: 10px;
   }
 
-  .map-header,
   .section-title {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .sidebar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "stats"
+      "filter"
+      "layers"
+      "area";
   }
 
   .map-wrapper {

@@ -29,6 +29,13 @@ type LeafletMap = Leaflet.Map;
 type LeafletLayer = Leaflet.GeoJSON | Leaflet.TileLayer;
 
 const CAMPOS_GERAIS_CENTER: [number, number] = [-24.75, -50.05];
+const ALWAYS_VISIBLE_LAYER_ID = "campos-gerais";
+
+function isLayerVisible(layerId: string, visibleLayerIds: Set<string>) {
+  return (
+    layerId === ALWAYS_VISIBLE_LAYER_ID || visibleLayerIds.has(layerId)
+  );
+}
 
 // Caixa delimitadora aproximada cobrindo os 19 municípios dos Campos Gerais
 // (PR): Arapoti, Carambeí, Castro, Curiúva, Imbaú, Ipiranga, Ivaí,
@@ -39,6 +46,60 @@ const CAMPOS_GERAIS_BOUNDS: [[number, number], [number, number]] = [
   [-25.9, -51.3],
   [-23.8, -49.1],
 ];
+
+const PROPERTY_LABELS: Record<string, string> = {
+  fid: "ID",
+  CD_MUN: "Código",
+  NM_MUN: "Município",
+  id1: "ID da área",
+  cd_fcim: "Folha",
+  leg_carga: "Legenda",
+  cd_fito: "Cód. fitogeográfico",
+  cd_leg_2: "Cód. de uso",
+  clas_domi: "Classe",
+  leg_uveg: "Sigla da vegetação",
+  nm_uveg: "Vegetação",
+  leg_uantr: "Sigla de uso",
+  nm_uantr: "Uso antrópico",
+  leg_contat: "Sigla do contato",
+  nm_contat: "Contato",
+  veg_pretet: "Sigla da vegetação",
+  nm_pretet: "Vegetação original",
+  leg_sec1: "Sigla secundária 1",
+  nm_sec1: "Vegetação secundária 1",
+  leg_sec2: "Sigla secundária 2",
+  nm_sec2: "Vegetação secundária 2",
+  leg_sup: "Predominância",
+  legenda_1: "Formação",
+  legenda_2: "Cobertura do solo",
+  legenda: "Classificação",
+  ar_poli_km: "Área (km²)",
+  leg1_id: "ID da formação",
+  leg2_id: "ID da cobertura",
+};
+
+function formatPropertyLabel(key: string) {
+  const mappedLabel = PROPERTY_LABELS[key];
+  if (mappedLabel) return mappedLabel;
+
+  const readableLabel = key
+    .replaceAll("_", " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLocaleLowerCase("pt-BR");
+
+  return readableLabel.replace(/^./, (firstLetter) =>
+    firstLetter.toLocaleUpperCase("pt-BR"),
+  );
+}
+
+function escapeHtml(value: unknown) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 function formatArea(squareMeters: number) {
   const hectares = squareMeters / 10_000;
@@ -74,7 +135,7 @@ function buildPopupContent(feature: Feature, layer: DashboardLayer) {
     .slice(0, 8)
     .map(
       ([key, value]) =>
-        `<tr><th>${key}</th><td>${String(value).replaceAll("<", "&lt;")}</td></tr>`,
+        `<tr><th>${escapeHtml(formatPropertyLabel(key))}</th><td>${escapeHtml(value)}</td></tr>`,
     )
     .join("");
 
@@ -161,12 +222,13 @@ export function GeoDashboard() {
       ),
   );
   const [visibleLayerIds, setVisibleLayerIds] = useState<Set<string>>(
-    () =>
-      new Set(
-        DASHBOARD_LAYERS.filter((layer) => layer.defaultVisible).map(
-          (l) => l.id,
-        ),
-      ),
+    () => {
+      const defaultLayerIds = DASHBOARD_LAYERS.filter(
+        (layer) => layer.defaultVisible,
+      ).map((layer) => layer.id);
+
+      return new Set([...defaultLayerIds, ALWAYS_VISIBLE_LAYER_ID]);
+    },
   );
   const [selectedMunicipality, setSelectedMunicipality] = useState("todos");
   const [leafletError, setLeafletError] = useState<string | null>(null);
@@ -262,7 +324,7 @@ export function GeoDashboard() {
     if (!map || !leaflet) return;
 
     for (const [layerId, mapLayer] of renderedLayersRef.current.entries()) {
-      if (!visibleLayerIds.has(layerId)) {
+      if (!isLayerVisible(layerId, visibleLayerIds)) {
         map.removeLayer(mapLayer);
         renderedLayersRef.current.delete(layerId);
       }
@@ -270,7 +332,10 @@ export function GeoDashboard() {
 
     for (const layer of DASHBOARD_LAYERS) {
       const layerState = layerStates[layer.id];
-      if (!visibleLayerIds.has(layer.id) || layerState?.status !== "ready")
+      if (
+        !isLayerVisible(layer.id, visibleLayerIds) ||
+        layerState?.status !== "ready"
+      )
         continue;
       if (renderedLayersRef.current.has(layer.id)) continue;
 
@@ -306,7 +371,10 @@ export function GeoDashboard() {
   }, [layerStates, visibleLayerIds]);
 
   const activeLayers = useMemo(
-    () => DASHBOARD_LAYERS.filter((layer) => visibleLayerIds.has(layer.id)),
+    () =>
+      DASHBOARD_LAYERS.filter((layer) =>
+        isLayerVisible(layer.id, visibleLayerIds),
+      ),
     [visibleLayerIds],
   );
 
@@ -333,11 +401,10 @@ export function GeoDashboard() {
     [areaByLayer],
   );
   const totalAreaFormatted = formatArea(totalArea);
-  const missingLayers = Object.values(layerStates).filter(
-    (state) => state.status === "missing",
-  ).length;
 
   function toggleLayer(layerId: string) {
+    if (layerId === ALWAYS_VISIBLE_LAYER_ID) return;
+
     setVisibleLayerIds((current) => {
       const next = new Set(current);
       if (next.has(layerId)) next.delete(layerId);
@@ -348,7 +415,9 @@ export function GeoDashboard() {
 
   const groupedLayers = useMemo(
     () =>
-      DASHBOARD_LAYERS.reduce<Record<string, DashboardLayer[]>>(
+      DASHBOARD_LAYERS.filter(
+        (layer) => layer.id !== ALWAYS_VISIBLE_LAYER_ID,
+      ).reduce<Record<string, DashboardLayer[]>>(
         (groups, layer) => {
           groups[layer.group] ??= [];
           groups[layer.group].push(layer);
@@ -362,19 +431,6 @@ export function GeoDashboard() {
   return (
     <main className="dashboard-shell">
       <section className="map-panel" aria-label="Mapa geoespacial interativo">
-        <div className="map-header">
-          <div>
-            <span className="eyebrow">WebGIS Campos Gerais</span>
-            <h1>Dashboard de vegetação e áreas de preservação</h1>
-          </div>
-
-          <span className="map-status">
-            {missingLayers > 0
-              ? `${missingLayers} camada(s) aguardando GeoJSON`
-              : "Camadas carregadas"}
-          </span>
-        </div>
-
         <div className="map-wrapper">
           <div
 	    ref={mapElementRef}
@@ -402,15 +458,6 @@ export function GeoDashboard() {
       </section>
 
       <aside className="sidebar" aria-label="Controles e indicadores">
-        <section className="card intro-card">
-          <span className="eyebrow">Análise ambiental</span>
-          <h2>Campos Gerais - PR</h2>
-          <p>
-            Controle a visibilidade das camadas GeoJSON, navegue pelo mapa e
-            acompanhe a área total calculada no navegador.
-          </p>
-        </section>
-
         <section
           className="card stats-grid"
           aria-label="Indicadores principais"
@@ -467,7 +514,9 @@ export function GeoDashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => setVisibleLayerIds(new Set())}
+                onClick={() =>
+                  setVisibleLayerIds(new Set([ALWAYS_VISIBLE_LAYER_ID]))
+                }
               >
                 Limpar seleção
               </button>
