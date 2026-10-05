@@ -13,28 +13,6 @@ export type DashboardLayer = {
   fillOpacity: number;
 };
 
-export const MUNICIPALITIES = [
-  "Arapoti",
-  "Carambeí",
-  "Castro",
-  "Curiúva",
-  "Imbaú",
-  "Ipiranga",
-  "Ivaí",
-  "Jaguariaíva",
-  "Ortigueira",
-  "Palmeira",
-  "Piraí do Sul",
-  "Ponta Grossa",
-  "Porto Amazonas",
-  "Reserva",
-  "São João do Triunfo",
-  "Sengés",
-  "Telêmaco Borba",
-  "Tibagi",
-  "Ventania",
-];
-
 export const DASHBOARD_LAYERS: DashboardLayer[] = [
   {
     id: "campos-gerais",

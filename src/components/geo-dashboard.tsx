@@ -3,7 +3,6 @@
 import {
   DASHBOARD_LAYERS,
   GROUP_LABELS,
-  MUNICIPALITIES,
   type DashboardLayer,
 } from "@/lib/layers";
 import {
@@ -13,10 +12,17 @@ import {
   type Feature,
   type FeatureCollection,
 } from "@/lib/geojson";
+import {
+  getMunicipalityOptions,
+  type LayerCollections,
+  type MunicipalityFilterWorkerRequest,
+  type MunicipalityFilterWorkerResponse,
+} from "@/lib/municipality-filter";
 import type * as Leaflet from "leaflet";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type LayerStatus = "idle" | "loading" | "ready" | "missing" | "error";
+type FilterStatus = "initializing" | "idle" | "processing";
 
 type LayerState = {
   data: FeatureCollection;
@@ -26,10 +32,11 @@ type LayerState = {
 
 type LeafletModule = typeof Leaflet;
 type LeafletMap = Leaflet.Map;
-type LeafletLayer = Leaflet.GeoJSON | Leaflet.TileLayer;
+type LeafletLayer = Leaflet.GeoJSON;
 
 const CAMPOS_GERAIS_CENTER: [number, number] = [-24.75, -50.05];
 const ALWAYS_VISIBLE_LAYER_ID = "campos-gerais";
+const ALL_MUNICIPALITIES = "todos";
 
 function isLayerVisible(layerId: string, visibleLayerIds: Set<string>) {
   return (
@@ -194,16 +201,25 @@ async function loadLayer(layer: DashboardLayer): Promise<LayerState> {
   }
 }
 
-function statusLabel(status: LayerStatus) {
-  const labels: Record<LayerStatus, string> = {
-    idle: "aguardando",
-    loading: "carregando",
-    ready: "pronta",
-    missing: "sem arquivo",
-    error: "erro",
-  };
+function layerStatesWithFilteredCollections(
+  layerStates: Record<string, LayerState>,
+  filteredCollections: LayerCollections | null,
+  keepFullBoundary: boolean,
+) {
+  if (!filteredCollections) return layerStates;
 
-  return labels[status];
+  return Object.fromEntries(
+    Object.entries(layerStates).map(([layerId, state]) => [
+      layerId,
+      {
+        ...state,
+        data:
+          keepFullBoundary && layerId === ALWAYS_VISIBLE_LAYER_ID
+            ? state.data
+            : (filteredCollections[layerId] ?? state.data),
+      },
+    ]),
+  );
 }
 
 export function GeoDashboard() {
@@ -211,7 +227,9 @@ export function GeoDashboard() {
   const mapRef = useRef<LeafletMap | null>(null);
   const leafletRef = useRef<LeafletModule | null>(null);
   const renderedLayersRef = useRef<Map<string, LeafletLayer>>(new Map());
-  const didFitToBoundaryRef = useRef(false);
+  const filterWorkerRef = useRef<Worker | null>(null);
+  const filterRequestIdRef = useRef(0);
+  const lastFittedMunicipalityRef = useRef<string | null>(null);
   const [layerStates, setLayerStates] = useState<Record<string, LayerState>>(
     () =>
       Object.fromEntries(
@@ -230,8 +248,23 @@ export function GeoDashboard() {
       return new Set([...defaultLayerIds, ALWAYS_VISIBLE_LAYER_ID]);
     },
   );
-  const [selectedMunicipality, setSelectedMunicipality] = useState("todos");
+  const [selectedMunicipalityCode, setSelectedMunicipalityCode] = useState(
+    ALL_MUNICIPALITIES,
+  );
+  const [appliedMunicipalityCode, setAppliedMunicipalityCode] = useState(
+    ALL_MUNICIPALITIES,
+  );
+  const [filteredCollections, setFilteredCollections] =
+    useState<LayerCollections | null>(null);
+  const [filterStatus, setFilterStatus] =
+    useState<FilterStatus>("initializing");
+  const [filterError, setFilterError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [leafletError, setLeafletError] = useState<string | null>(null);
+  const layersLoaded = Object.values(layerStates).every(
+    (state) => state.status !== "idle" && state.status !== "loading",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -268,6 +301,107 @@ export function GeoDashboard() {
     };
   }, []);
 
+  const municipalities = useMemo(() => {
+    const boundaryState = layerStates[ALWAYS_VISIBLE_LAYER_ID];
+    return boundaryState?.status === "ready"
+      ? getMunicipalityOptions(boundaryState.data)
+      : [];
+  }, [layerStates]);
+
+  const displayLayerStates = useMemo(
+    () =>
+      appliedMunicipalityCode === ALL_MUNICIPALITIES
+        ? layerStates
+        : layerStatesWithFilteredCollections(
+            layerStates,
+            filteredCollections,
+            true,
+          ),
+    [appliedMunicipalityCode, filteredCollections, layerStates],
+  );
+
+  const analysisLayerStates = useMemo(
+    () =>
+      appliedMunicipalityCode === ALL_MUNICIPALITIES
+        ? layerStates
+        : layerStatesWithFilteredCollections(
+            layerStates,
+            filteredCollections,
+            false,
+          ),
+    [appliedMunicipalityCode, filteredCollections, layerStates],
+  );
+
+  useEffect(() => {
+    if (!layersLoaded) return;
+
+    if (layerStates[ALWAYS_VISIBLE_LAYER_ID]?.status !== "ready") {
+      setFilterStatus("idle");
+      setFilterError("A camada de limites municipais não está disponível.");
+      return;
+    }
+
+    const worker = new Worker(
+      new URL("../workers/municipality-filter.worker.ts", import.meta.url),
+      { type: "module" },
+    );
+    filterWorkerRef.current = worker;
+    setFilterStatus("initializing");
+
+    worker.onmessage = (
+      event: MessageEvent<MunicipalityFilterWorkerResponse>,
+    ) => {
+      const message = event.data;
+
+      if (message.type === "ready") {
+        setFilterStatus("idle");
+        setFilterError(null);
+        return;
+      }
+
+      if (message.requestId !== filterRequestIdRef.current) return;
+
+      if (message.type === "result") {
+        setFilteredCollections(message.result.collections);
+        setAppliedMunicipalityCode(message.municipalityCode);
+        setFilterStatus("idle");
+        setFilterError(null);
+        return;
+      }
+
+      setFilteredCollections(null);
+      setSelectedMunicipalityCode(ALL_MUNICIPALITIES);
+      setAppliedMunicipalityCode(ALL_MUNICIPALITIES);
+      setFilterStatus("idle");
+      setFilterError(message.message);
+    };
+
+    worker.onerror = () => {
+      setFilteredCollections(null);
+      setSelectedMunicipalityCode(ALL_MUNICIPALITIES);
+      setAppliedMunicipalityCode(ALL_MUNICIPALITIES);
+      setFilterStatus("idle");
+      setFilterError("Não foi possível iniciar o filtro municipal.");
+    };
+
+    const readyCollections = Object.fromEntries(
+      Object.entries(layerStates)
+        .filter(([, state]) => state.status === "ready")
+        .map(([layerId, state]) => [layerId, state.data]),
+    );
+
+    worker.postMessage({
+      type: "initialize",
+      boundaryLayerId: ALWAYS_VISIBLE_LAYER_ID,
+      collections: readyCollections,
+    } satisfies MunicipalityFilterWorkerRequest);
+
+    return () => {
+      worker.terminate();
+      if (filterWorkerRef.current === worker) filterWorkerRef.current = null;
+    };
+  }, [layerStates, layersLoaded]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -281,6 +415,7 @@ export function GeoDashboard() {
           center: CAMPOS_GERAIS_CENTER,
           zoom: 8,
           zoomControl: true,
+          attributionControl: false,
           scrollWheelZoom: true,
           maxBounds: CAMPOS_GERAIS_BOUNDS,
           maxBoundsViscosity: 1.0,
@@ -298,6 +433,7 @@ export function GeoDashboard() {
         map.fitBounds(CAMPOS_GERAIS_BOUNDS);
 
         mapRef.current = map;
+        setMapReady(true);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -321,31 +457,49 @@ export function GeoDashboard() {
   useEffect(() => {
     const map = mapRef.current;
     const leaflet = leafletRef.current;
-    if (!map || !leaflet) return;
+    if (!map || !leaflet || !mapReady) return;
 
-    for (const [layerId, mapLayer] of renderedLayersRef.current.entries()) {
-      if (!isLayerVisible(layerId, visibleLayerIds)) {
-        map.removeLayer(mapLayer);
-        renderedLayersRef.current.delete(layerId);
-      }
+    for (const mapLayer of renderedLayersRef.current.values()) {
+      map.removeLayer(mapLayer);
     }
+    renderedLayersRef.current.clear();
 
     for (const layer of DASHBOARD_LAYERS) {
-      const layerState = layerStates[layer.id];
+      const layerState = displayLayerStates[layer.id];
       if (
         !isLayerVisible(layer.id, visibleLayerIds) ||
         layerState?.status !== "ready"
       )
         continue;
-      if (renderedLayersRef.current.has(layer.id)) continue;
 
       const mapLayer = leaflet.geoJSON(layerState.data, {
-        style: {
-          color: layer.color,
-          weight: layer.group === "limite" ? 2 : 1.2,
-          opacity: layer.opacity,
-          fillColor: layer.fillColor,
-          fillOpacity: layer.fillOpacity,
+        style: (feature) => {
+          const isBoundary = layer.id === ALWAYS_VISIBLE_LAYER_ID;
+          const isSelectedMunicipality =
+            isBoundary &&
+            appliedMunicipalityCode !== ALL_MUNICIPALITIES &&
+            String(feature?.properties?.CD_MUN) === appliedMunicipalityCode;
+
+          if (
+            isBoundary &&
+            appliedMunicipalityCode !== ALL_MUNICIPALITIES
+          ) {
+            return {
+              color: layer.color,
+              weight: isSelectedMunicipality ? 4 : 1.2,
+              opacity: isSelectedMunicipality ? 1 : 0.45,
+              fillColor: layer.fillColor,
+              fillOpacity: isSelectedMunicipality ? 0.18 : 0.02,
+            };
+          }
+
+          return {
+            color: layer.color,
+            weight: isBoundary ? 2 : 1.2,
+            opacity: layer.opacity,
+            fillColor: layer.fillColor,
+            fillOpacity: layer.fillOpacity,
+          };
         },
         onEachFeature: (feature, featureLayer) => {
           featureLayer.bindPopup(
@@ -358,17 +512,29 @@ export function GeoDashboard() {
       renderedLayersRef.current.set(layer.id, mapLayer);
     }
 
-    if (!didFitToBoundaryRef.current) {
-      const boundaryLayer = renderedLayersRef.current.get("campos-gerais") as
-        | Leaflet.GeoJSON
-        | undefined;
-      const bounds = boundaryLayer?.getBounds();
+    renderedLayersRef.current.get(ALWAYS_VISIBLE_LAYER_ID)?.bringToFront();
+
+    if (lastFittedMunicipalityRef.current !== appliedMunicipalityCode) {
+      const boundaryData =
+        analysisLayerStates[ALWAYS_VISIBLE_LAYER_ID]?.data ??
+        emptyFeatureCollection();
+      const bounds = leaflet.geoJSON(boundaryData).getBounds();
       if (bounds?.isValid()) {
-        map.fitBounds(bounds, { padding: [28, 28], maxZoom: 10 });
-        didFitToBoundaryRef.current = true;
+        map.fitBounds(bounds, {
+          padding: [28, 28],
+          maxZoom:
+            appliedMunicipalityCode === ALL_MUNICIPALITIES ? 10 : 11,
+        });
+        lastFittedMunicipalityRef.current = appliedMunicipalityCode;
       }
     }
-  }, [layerStates, visibleLayerIds]);
+  }, [
+    analysisLayerStates,
+    appliedMunicipalityCode,
+    displayLayerStates,
+    mapReady,
+    visibleLayerIds,
+  ]);
 
   const activeLayers = useMemo(
     () =>
@@ -381,7 +547,7 @@ export function GeoDashboard() {
   const areaByLayer = useMemo(
     () =>
       activeLayers.map((layer) => {
-        const state = layerStates[layer.id];
+        const state = analysisLayerStates[layer.id];
         const squareMeters = state
           ? featureCollectionAreaInSquareMeters(state.data)
           : 0;
@@ -389,18 +555,10 @@ export function GeoDashboard() {
           layer,
           squareMeters,
           formatted: formatArea(squareMeters),
-          featureCount: state?.data.features.length ?? 0,
-          status: state?.status ?? "idle",
         };
       }),
-    [activeLayers, layerStates],
+    [activeLayers, analysisLayerStates],
   );
-
-  const totalArea = useMemo(
-    () => areaByLayer.reduce((total, item) => total + item.squareMeters, 0),
-    [areaByLayer],
-  );
-  const totalAreaFormatted = formatArea(totalArea);
 
   function toggleLayer(layerId: string) {
     if (layerId === ALWAYS_VISIBLE_LAYER_ID) return;
@@ -412,6 +570,47 @@ export function GeoDashboard() {
       return next;
     });
   }
+
+  function selectMunicipality(municipalityCode: string) {
+    setFilterError(null);
+    setSelectedMunicipalityCode(municipalityCode);
+    filterRequestIdRef.current += 1;
+
+    if (municipalityCode === ALL_MUNICIPALITIES) {
+      setFilteredCollections(null);
+      setAppliedMunicipalityCode(ALL_MUNICIPALITIES);
+      setFilterStatus("idle");
+      return;
+    }
+
+    const worker = filterWorkerRef.current;
+    if (!worker) {
+      setSelectedMunicipalityCode(ALL_MUNICIPALITIES);
+      setFilterError("O filtro municipal ainda não está disponível.");
+      return;
+    }
+
+    setFilterStatus("processing");
+    worker.postMessage({
+      type: "filter",
+      requestId: filterRequestIdRef.current,
+      municipalityCode,
+    } satisfies MunicipalityFilterWorkerRequest);
+  }
+
+  const filterMessage = (() => {
+    if (filterError) return filterError;
+    if (filterStatus === "processing") return "Aplicando filtro…";
+    if (filterStatus === "initializing" || !layersLoaded) {
+      return "Preparando filtro municipal…";
+    }
+    return null;
+  })();
+
+  const isMunicipalityFilterDisabled =
+    layerStates[ALWAYS_VISIBLE_LAYER_ID]?.status !== "ready" ||
+    filterStatus !== "idle" ||
+    filterWorkerRef.current === null;
 
   const groupedLayers = useMemo(
     () =>
@@ -430,72 +629,114 @@ export function GeoDashboard() {
 
   return (
     <main className="dashboard-shell">
+      <header className="page-heading">
+        <div>
+          <span>WebGIS Campos Gerais</span>
+          <div className="page-title-row">
+            <svg
+              className="page-title-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
+              <path d="M9 3v15M15 6v15" />
+            </svg>
+            <h1>
+              Dashboard geoespacial interativo para análise de vegetação e
+              áreas de preservação na região dos Campos Gerais
+            </h1>
+          </div>
+        </div>
+        <a
+          className="repository-link"
+          href="https://github.com/LucasSachs/TCC-2026"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Abrir repositório do projeto no GitHub"
+          title="Abrir repositório no GitHub"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.49 0-.24-.01-1.05-.01-1.91-2.78.62-3.37-1.21-3.37-1.21-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.12 2.91.85.09-.66.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.04 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.33 9.33 0 0 1 12 7.08c.85 0 1.7.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.71 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.38-.01 2.49-.01 2.83 0 .27.18.59.69.49A10.27 10.27 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
+          </svg>
+          <span className="sr-only">Abrir repositório do projeto no GitHub</span>
+        </a>
+      </header>
+
       <section className="map-panel" aria-label="Mapa geoespacial interativo">
         <div className="map-wrapper">
+          <div ref={mapElementRef} className="map-canvas" />
+
+          {leafletError || filterError ? (
+            <div className="map-error">{leafletError ?? filterError}</div>
+          ) : null}
+
           <div
-	    ref={mapElementRef}
-	    className="map-canvas"
-	  />
+            className={`map-legend${isLegendOpen ? "" : " map-legend-collapsed"}`}
+          >
+            <button
+              type="button"
+              className="map-legend-toggle"
+              aria-expanded={isLegendOpen}
+              onClick={() => setIsLegendOpen((isOpen) => !isOpen)}
+            >
+              <strong>Legenda ativa</strong>
+              <b aria-hidden="true">{isLegendOpen ? "−" : "+"}</b>
+            </button>
 
-          {leafletError ? ( <div className="map-error">{leafletError}</div>) : null}
-
-          <div className="map-legend">
-            <strong>Legenda ativa</strong>
-
-            {activeLayers.map((layer) => (
-              <span key={layer.id}>
-                <i
-                  style={{
-                    background: layer.fillColor,
-                    borderColor: layer.color,
-                  }}
-                />
-                {layer.name}
-              </span>
-            ))}
+            {isLegendOpen
+              ? activeLayers.map((layer) => (
+                  <span key={layer.id}>
+                    <i
+                      style={{
+                        background: layer.fillColor,
+                        borderColor: layer.color,
+                      }}
+                    />
+                    {layer.name}
+                  </span>
+                ))
+              : null}
           </div>
         </div>
       </section>
 
-      <aside className="sidebar" aria-label="Controles e indicadores">
-        <section
-          className="card stats-grid"
-          aria-label="Indicadores principais"
-        >
-          <div>
-            <span>Área ativa</span>
-            <strong>{totalAreaFormatted.hectares} ha</strong>
-            <small>{totalAreaFormatted.squareKilometers} km²</small>
-          </div>
-
-          <div>
-            <span>Camadas visíveis</span>
-            <strong>{activeLayers.length}</strong>
-            <small>{DASHBOARD_LAYERS.length} configuradas</small>
-          </div>
-        </section>
-
+      <aside className="sidebar" aria-label="Controles do mapa">
         <section className="card control-card">
           <label htmlFor="municipality-filter">Filtro por município</label>
 
-          <select
-            id="municipality-filter"
-            value={selectedMunicipality}
-            onChange={(event) => setSelectedMunicipality(event.target.value)}
-          >
-            <option value="todos">Todos os municípios</option>
-            {MUNICIPALITIES.map((municipality) => (
-              <option key={municipality} value={municipality}>
-                {municipality}
-              </option>
-            ))}
-          </select>
+          <div className="municipality-select">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
+            <select
+              id="municipality-filter"
+              value={selectedMunicipalityCode}
+              disabled={isMunicipalityFilterDisabled}
+              aria-busy={filterStatus === "processing"}
+              onChange={(event) => selectMunicipality(event.target.value)}
+            >
+              <option value={ALL_MUNICIPALITIES}>Todos os municípios</option>
+              {municipalities.map((municipality) => (
+                <option key={municipality.code} value={municipality.code}>
+                  {municipality.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <p>
-            O filtro está preparado na interface. Quando os GeoJSON tiverem
-            atributo municipal ou interseção espacial validada, o recorte será
-            aplicado ao cálculo.
-          </p>
+          {filterMessage ? (
+            <p
+              className="filter-status"
+              aria-live="polite"
+              aria-busy={filterStatus !== "idle"}
+            >
+              {filterStatus !== "idle" ? (
+                <span className="filter-spinner" aria-hidden="true" />
+              ) : null}
+              <span>{filterMessage}</span>
+            </p>
+          ) : null}
         </section>
 
         <section className="card layers-card">
@@ -527,9 +768,11 @@ export function GeoDashboard() {
             <div className="layer-group" key={group}>
               <h3>{GROUP_LABELS[group as keyof typeof GROUP_LABELS]}</h3>
               {layers.map((layer) => {
-                const state = layerStates[layer.id];
                 return (
-                  <label className="layer-toggle" key={layer.id}>
+                  <label
+                    className={`layer-toggle${visibleLayerIds.has(layer.id) ? " layer-toggle-selected" : ""}`}
+                    key={layer.id}
+                  >
                     <input
                       type="checkbox"
                       checked={visibleLayerIds.has(layer.id)}
@@ -545,7 +788,6 @@ export function GeoDashboard() {
                     <span className="layer-copy">
                       <strong>{layer.name}</strong>
                       <small>{layer.description}</small>
-                      <em>{statusLabel(state?.status ?? "idle")}</em>
                     </span>
                   </label>
                 );
@@ -569,14 +811,16 @@ export function GeoDashboard() {
                   {item.layer.name}
                 </span>
                 <strong>{item.formatted.hectares} ha</strong>
-                <small>
-                  {item.featureCount} feição(ões) · {statusLabel(item.status)}
-                </small>
               </div>
             ))}
           </div>
         </section>
       </aside>
+
+      <footer className="page-footer">
+        Desenvolvido por <strong>Lucas Sachs</strong> e{" "}
+        <strong>Amanda Yohana</strong>
+      </footer>
     </main>
   );
 }

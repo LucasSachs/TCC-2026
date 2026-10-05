@@ -39,6 +39,10 @@ input {
   font: inherit;
 }
 
+.map-canvas .leaflet-control-attribution {
+  display: none;
+}
+
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
   color: var(--foreground);
@@ -51,17 +55,124 @@ input {
 .dashboard-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(560px, 42vw);
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title title"
+    "map sidebar"
+    "footer footer";
+  gap: 8px;
+  height: 100vh;
   min-height: 100vh;
-  padding: 18px;
+  padding: 8px;
+}
+
+.page-heading {
+  grid-area: title;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  padding: 11px 20px;
+  background: #ffffff;
+  color: var(--foreground);
+  box-shadow: 0 8px 22px rgba(20, 45, 25, 0.08);
+}
+
+.page-heading > div > span {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--primary-dark);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.repository-link {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: #f7f9f6;
+  color: var(--foreground);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.repository-link:hover,
+.repository-link:focus-visible {
+  border-color: rgba(47, 125, 70, 0.35);
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.repository-link svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.page-footer {
+  grid-area: footer;
+  width: 100%;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 8px 16px;
+  background: #ffffff;
+  color: var(--muted);
+  box-shadow: 0 6px 18px rgba(20, 45, 25, 0.06);
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.page-footer strong {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.page-heading h1 {
+  margin: 0;
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-title-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  fill: none;
+  stroke: var(--primary-dark);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .map-panel,
 .sidebar {
+  min-height: 0;
   min-width: 0;
 }
 
 .map-panel {
+  grid-area: map;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -120,6 +231,42 @@ input {
   font-size: 0.82rem;
 }
 
+.map-legend-collapsed {
+  gap: 0;
+}
+
+.map-legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  text-align: left;
+}
+
+.map-legend-toggle b {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-legend-toggle:hover b,
+.map-legend-toggle:focus-visible b {
+  background: var(--primary);
+  color: white;
+}
+
 .map-legend span,
 .area-row span {
   display: flex;
@@ -139,16 +286,16 @@ input {
 }
 
 .sidebar {
+  grid-area: sidebar;
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 1.1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
-    "layers stats"
     "layers filter"
     "layers area";
-  gap: 14px;
-  height: calc(100vh - 36px);
-  max-height: calc(100vh - 36px);
+  gap: 8px;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
 }
 
@@ -163,8 +310,7 @@ input {
 }
 
 .control-card p,
-.layer-copy small,
-.area-row small {
+.layer-copy small {
   color: var(--muted);
 }
 
@@ -173,11 +319,27 @@ input {
   line-height: 1.5;
 }
 
-.stats-grid {
-  grid-area: stats;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+.filter-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.filter-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid var(--primary-soft);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: filter-spinner-rotation 0.7s linear infinite;
+}
+
+@keyframes filter-spinner-rotation {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .control-card {
@@ -192,48 +354,53 @@ input {
   grid-area: area;
 }
 
-.stats-grid div {
-  border-radius: 18px;
-  padding: 14px;
-  background: linear-gradient(135deg, #e7f4e9, #f8fbf7);
-}
-
-.stats-grid span,
-.stats-grid small,
-.area-row small {
-  display: block;
-}
-
-.stats-grid span,
-.control-card label {
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.stats-grid strong {
-  display: block;
-  margin-top: 8px;
-  color: var(--primary-dark);
-  font-size: 1.45rem;
-  line-height: 1;
-}
-
-.stats-grid small {
-  margin-top: 5px;
-  color: var(--muted);
+.section-title h2,
+.control-card label,
+.table-card h2 {
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .control-card select {
   width: 100%;
-  margin-top: 8px;
+  margin-top: 0;
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 11px 12px;
+  border-radius: 10px;
+  padding: 4px 10px 4px 34px;
   background: white;
   color: var(--foreground);
+}
+
+.municipality-select {
+  position: relative;
+  margin-top: 8px;
+}
+
+.municipality-select svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--primary-dark);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.municipality-select:has(select:disabled) svg {
+  opacity: 0.55;
+}
+
+.control-card select:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .section-title {
@@ -290,26 +457,42 @@ input {
   margin-bottom: 8px;
   color: var(--primary-dark);
   font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .layer-toggle {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 4px;
   align-items: start;
-  padding: 10px 0;
-  border-top: 1px solid rgba(38, 74, 48, 0.08);
+  margin-inline: -8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 12px 8px;
+  background: transparent;
   cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.layer-toggle + .layer-toggle {
+  margin-top: 8px;
+}
+
+.layer-toggle-selected {
+  border-color: rgba(47, 125, 70, 0.2);
+  background: rgba(47, 125, 70, 0.065);
 }
 
 .layer-toggle input {
   margin-top: 3px;
+  margin-right: 8px;
   accent-color: var(--primary);
 }
 
 .layer-copy strong,
-.layer-copy small,
-.layer-copy em {
+.layer-copy small {
   display: block;
 }
 
@@ -320,18 +503,6 @@ input {
 .layer-copy small {
   margin-top: 3px;
   line-height: 1.35;
-}
-
-.layer-copy em {
-  width: fit-content;
-  margin-top: 6px;
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: #eef4ee;
-  color: var(--primary-dark);
-  font-size: 0.72rem;
-  font-style: normal;
-  font-weight: 800;
 }
 
 .table-card h2 {
@@ -346,8 +517,9 @@ input {
 .area-row {
   display: grid;
   gap: 4px;
+  border: 1px solid rgba(47, 125, 70, 0.16);
   border-radius: 16px;
-  padding: 12px;
+  padding: 4px 12px;
   background: #f8fbf7;
 }
 
@@ -379,6 +551,13 @@ input {
 @media (max-width: 1100px) {
   .dashboard-shell {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "title"
+      "map"
+      "sidebar"
+      "footer";
+    height: auto;
   }
 
   .sidebar {
@@ -402,11 +581,14 @@ input {
     flex-direction: column;
   }
 
+  .page-heading {
+    padding: 10px 14px;
+  }
+
   .sidebar {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
     grid-template-areas:
-      "stats"
       "filter"
       "layers"
       "area";
@@ -423,7 +605,7 @@ input {
     max-width: none;
   }
 
-  .stats-grid {
-    grid-template-columns: 1fr;
+  .map-legend.map-legend-collapsed {
+    left: auto;
   }
 }
