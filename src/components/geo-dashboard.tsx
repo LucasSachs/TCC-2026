@@ -19,6 +19,7 @@ import {
   type MunicipalityFilterWorkerResponse,
 } from "@/lib/municipality-filter";
 import type * as Leaflet from "leaflet";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type LayerStatus = "idle" | "loading" | "ready" | "missing" | "error";
@@ -630,23 +631,19 @@ export function GeoDashboard() {
   return (
     <main className="dashboard-shell">
       <header className="page-heading">
-        <div>
-          <span>WebGIS Campos Gerais</span>
-          <div className="page-title-row">
-            <svg
-              className="page-title-icon"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" />
-              <path d="M9 3v15M15 6v15" />
-            </svg>
-            <h1>
-              Dashboard geoespacial interativo para análise de vegetação e
-              áreas de preservação na região dos Campos Gerais
-            </h1>
-          </div>
+        <div className="page-title-icon-wrap" aria-hidden="true">
+          <Image
+            className="page-title-icon"
+            src="/icon.svg"
+            alt=""
+            width={30}
+            height={30}
+          />
         </div>
+        <h1>
+          Dashboard geoespacial interativo para análise de vegetação e áreas de
+          preservação na região dos Campos Gerais
+        </h1>
         <a
           className="repository-link"
           href="https://github.com/LucasSachs/TCC-2026"
@@ -704,7 +701,9 @@ export function GeoDashboard() {
         <section className="card control-card">
           <label htmlFor="municipality-filter">Filtro por município</label>
 
-          <div className="municipality-select">
+          <div
+            className={`municipality-select${selectedMunicipalityCode !== ALL_MUNICIPALITIES ? " municipality-select-active" : ""}`}
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
               <circle cx="12" cy="10" r="2.5" />
@@ -769,27 +768,50 @@ export function GeoDashboard() {
               <h3>{GROUP_LABELS[group as keyof typeof GROUP_LABELS]}</h3>
               {layers.map((layer) => {
                 return (
-                  <label
+                  <div
                     className={`layer-toggle${visibleLayerIds.has(layer.id) ? " layer-toggle-selected" : ""}`}
                     key={layer.id}
                   >
-                    <input
-                      type="checkbox"
-                      checked={visibleLayerIds.has(layer.id)}
-                      onChange={() => toggleLayer(layer.id)}
-                    />
-                    <span
-                      className="layer-swatch"
-                      style={{
-                        background: layer.fillColor,
-                        borderColor: layer.color,
-                      }}
-                    />
-                    <span className="layer-copy">
-                      <strong>{layer.name}</strong>
-                      <small>{layer.description}</small>
-                    </span>
-                  </label>
+                    <label className="layer-toggle-control">
+                      <input
+                        type="checkbox"
+                        checked={visibleLayerIds.has(layer.id)}
+                        onChange={() => toggleLayer(layer.id)}
+                      />
+                      <span
+                        className="layer-swatch"
+                        style={{
+                          background: layer.fillColor,
+                          borderColor: layer.color,
+                        }}
+                      />
+                      <span className="layer-copy">
+                        <strong>{layer.name}</strong>
+                        {layer.id === "unidades-conservacao" ? (
+                          <small>{layer.description}</small>
+                        ) : null}
+                      </span>
+                    </label>
+                    {layer.helpText ? (
+                      <span className="layer-help">
+                        <button
+                          type="button"
+                          aria-describedby={`layer-help-${layer.id}`}
+                          aria-label={`Saiba mais sobre ${layer.name}`}
+                        >
+                          ?
+                        </button>
+                        <span
+                          className="layer-help-tooltip"
+                          id={`layer-help-${layer.id}`}
+                          role="tooltip"
+                        >
+                          <strong>Informações</strong>
+                          <span>{layer.helpText}</span>
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

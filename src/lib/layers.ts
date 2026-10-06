@@ -4,6 +4,7 @@ export type DashboardLayer = {
   id: string;
   name: string;
   description: string;
+  helpText?: string;
   group: LayerGroup;
   file: string;
   color: string;
@@ -22,7 +23,7 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
     file: "campos_gerais.geojson",
     color: "#1b7837",
     fillColor: "#b8e186",
-    defaultVisible: true,
+    defaultVisible: false,
     opacity: 0.95,
     fillOpacity: 0.08,
   },
@@ -34,7 +35,7 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
     file: "estepe.geojson",
     color: "#4d9221",
     fillColor: "#7fbc41",
-    defaultVisible: true,
+    defaultVisible: false,
     opacity: 0.9,
     fillOpacity: 0.42,
   },
@@ -46,7 +47,7 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
     file: "floresta_ombrofila_mista.geojson",
     color: "#006837",
     fillColor: "#238443",
-    defaultVisible: true,
+    defaultVisible: false,
     opacity: 0.9,
     fillOpacity: 0.42,
   },
@@ -117,6 +118,8 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
     name: "Áreas de Preservação Permanente",
     description:
       "APPs hídricas, nascentes e reservatórios exportados para GeoJSON.",
+    helpText:
+      "As Áreas de Preservação Permanente protegem locais importantes, como margens de rios, nascentes e áreas com maior fragilidade ambiental",
     group: "app",
     file: "apps.geojson",
     color: "#2b8cbe",
@@ -128,7 +131,10 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
   {
     id: "unidades-conservacao",
     name: "Unidades de Conservação",
-    description: "Unidades de Proteção Integral e Uso Sustentável.",
+    description:
+      "Unidades de Conservação de Proteção Integral e de Uso Sustentável no estado do Paraná de gestão Estadual.",
+    helpText:
+      "As Unidades de Conservação são áreas criadas pelo poder público para proteger a natureza. Algumas possuem regras mais restritivas, enquanto outras permitem o uso sustentável de parte dos recursos naturais, dependendo da categoria em que estão classificadas. Esse mapeamento é utilizado pelo Instituto Água e Terra como apoio ao planejamento ambiental do Paraná",
     group: "conservacao",
     file: "unidades_conservacao.geojson",
     color: "#762a83",
