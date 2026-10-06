@@ -1,4 +1,4 @@
-export type LayerGroup = "limite" | "vegetacao" | "app" | "conservacao" | "car";
+export type LayerGroup = "limite" | "vegetacao" | "conservacao" | "car";
 
 export type DashboardLayer = {
   id: string;
@@ -114,21 +114,6 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
     fillOpacity: 0.48,
   },
   {
-    id: "apps",
-    name: "Áreas de Preservação Permanente",
-    description:
-      "APPs hídricas, nascentes e reservatórios exportados para GeoJSON.",
-    helpText:
-      "As Áreas de Preservação Permanente protegem locais importantes, como margens de rios, nascentes e áreas com maior fragilidade ambiental",
-    group: "app",
-    file: "apps.geojson",
-    color: "#2b8cbe",
-    fillColor: "#7bccc4",
-    defaultVisible: false,
-    opacity: 0.9,
-    fillOpacity: 0.38,
-  },
-  {
     id: "unidades-conservacao",
     name: "Unidades de Conservação",
     description:
@@ -144,11 +129,26 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
     fillOpacity: 0.32,
   },
   {
+    id: "apps",
+    name: "Áreas de Preservação Permanente",
+    description:
+      "APPs hídricas, nascentes e reservatórios exportados para GeoJSON.",
+    helpText:
+      "As Áreas de Preservação Permanente protegem locais importantes, como margens de rios, nascentes e áreas com maior fragilidade ambiental",
+    group: "car",
+    file: "apps_map.geojson",
+    color: "#2b8cbe",
+    fillColor: "#7bccc4",
+    defaultVisible: false,
+    opacity: 0.9,
+    fillOpacity: 0.38,
+  },
+  {
     id: "reserva-legal-car",
     name: "Reserva Legal / CAR",
     description: "Áreas declaradas no Cadastro Ambiental Rural.",
     group: "car",
-    file: "reserva_legal_car.geojson",
+    file: "reserva_legal_car_map.geojson",
     color: "#b35806",
     fillColor: "#f1a340",
     defaultVisible: false,
@@ -160,7 +160,6 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
 export const GROUP_LABELS: Record<LayerGroup, string> = {
   limite: "Delimitação espacial",
   vegetacao: "Cobertura vegetal",
-  app: "Áreas de preservação",
   conservacao: "Unidades de conservação",
   car: "Cadastro Ambiental Rural",
 };

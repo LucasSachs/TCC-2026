@@ -415,6 +415,7 @@ export function GeoDashboard() {
         const map = leaflet.map(mapElementRef.current, {
           center: CAMPOS_GERAIS_CENTER,
           zoom: 8,
+          preferCanvas: true,
           zoomControl: true,
           attributionControl: false,
           scrollWheelZoom: true,
