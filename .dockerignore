@@ -1,0 +1,12 @@
+.git
+.next
+.pnpm-store
+node_modules
+coverage
+
+.env*
+*.log
+
+public/geojson/*.qmd
+public/geojson/apps.geojson
+public/geojson/reserva_legal_car.geojson
