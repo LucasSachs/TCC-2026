@@ -145,7 +145,7 @@ export const DASHBOARD_LAYERS: DashboardLayer[] = [
   },
   {
     id: "reserva-legal-car",
-    name: "Reserva Legal / CAR",
+    name: "Reserva Legal",
     description: "Áreas declaradas no Cadastro Ambiental Rural.",
     group: "car",
     file: "reserva_legal_car_map.geojson",

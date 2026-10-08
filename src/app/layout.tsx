@@ -11,8 +11,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Dashboard Geoespacial | Campos Gerais",
-  description: "Dashboard geoespacial interativo para análise de vegetação e áreas de preservação nos Campos Gerais.",
+  title: "Geoportal | Campos Gerais",
+  description: "Geoportal interativo para análise de vegetação e áreas de preservação nos Campos Gerais.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
