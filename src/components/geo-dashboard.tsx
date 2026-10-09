@@ -642,7 +642,7 @@ export function GeoDashboard() {
           />
         </div>
         <h1>
-          Geoportal interativo para análise de vegetação e áreas de
+          Dashboard geoespacial interativo para análise de vegetação e áreas de
           preservação na região dos Campos Gerais
         </h1>
         <a

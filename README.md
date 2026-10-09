@@ -1,14 +1,14 @@
-# Geoportal dos Campos Gerais
+# Dashboard geoespacial dos Campos Gerais
 
 Aplicação WebGIS desenvolvida em Next.js para integrar e visualizar dados de
 vegetação nativa e áreas de preservação nos 19 municípios associados à
 Associação dos Municípios dos Campos Gerais (AMCG), no Paraná.
 
-O geoportal apresenta camadas de formações vegetais, Unidades de Conservação,
-Áreas de Preservação Permanente (APP) e Reservas Legais. As camadas de APP e
-Reserva Legal foram obtidas a partir dos dados declarados no Cadastro Ambiental
-Rural (CAR). Os limites e os demais dados cadastrais dos imóveis rurais não são
-exibidos na aplicação.
+O dashboard geoespacial apresenta camadas de formações vegetais, Unidades de
+Conservação, Áreas de Preservação Permanente (APP) e Reservas Legais. As
+camadas de APP e Reserva Legal foram obtidas a partir dos dados declarados no
+Cadastro Ambiental Rural (CAR). Os limites e os demais dados cadastrais dos
+imóveis rurais não são exibidos na aplicação.
 
 ## Funcionalidades
 
@@ -64,13 +64,13 @@ cd TCC-2026
 Na raiz do projeto, construa a imagem:
 
 ```bash
-docker build -t geoportal-campos-gerais .
+docker build -t dashboard-geoespacial-campos-gerais .
 ```
 
 Depois, crie e inicie o contêiner:
 
 ```bash
-docker run --rm --name geoportal-campos-gerais -p 127.0.0.1:3000:3000 geoportal-campos-gerais
+docker run --rm --name dashboard-geoespacial-campos-gerais -p 127.0.0.1:3000:3000 dashboard-geoespacial-campos-gerais
 ```
 
 Quando a aplicação estiver pronta, acesse:
@@ -88,7 +88,7 @@ Após alterações no código ou nos arquivos GeoJSON, reconstrua a imagem antes
 iniciar um novo contêiner:
 
 ```bash
-docker build -t geoportal-campos-gerais .
+docker build -t dashboard-geoespacial-campos-gerais .
 ```
 
 ## Execução local sem Docker
@@ -136,7 +136,7 @@ construção da aplicação.
 │   └── geojson/             # Camadas geoespaciais consumidas pela aplicação
 ├── src/
 │   ├── app/                 # Página, layout e estilos globais
-│   ├── components/          # Interface e componente principal do geoportal
+│   ├── components/          # Interface e componente principal do dashboard
 │   └── lib/                 # Configuração das camadas e funções auxiliares
 ├── Dockerfile               # Etapas de instalação, compilação e execução
 ├── package.json             # Dependências e comandos do projeto
@@ -161,7 +161,7 @@ Encerre a aplicação que utiliza a porta ou publique o contêiner em outra port
 local. O exemplo abaixo utiliza a porta `3001`:
 
 ```bash
-docker run --rm --name geoportal-campos-gerais -p 127.0.0.1:3001:3000 geoportal-campos-gerais
+docker run --rm --name dashboard-geoespacial-campos-gerais -p 127.0.0.1:3001:3000 dashboard-geoespacial-campos-gerais
 ```
 
 Nesse caso, acesse `http://localhost:3001`.
